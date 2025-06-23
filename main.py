@@ -1,118 +1,62 @@
 from flask import Flask, request, jsonify
-import requests
-import os
+from openai import OpenAI
+from flask_cors import CORS
 from dotenv import load_dotenv
+import os
 
+# ✅ Load environment variables
 load_dotenv()
 
+# ✅ NVIDIA Nemotron API Key
+nvidia_api_key = os.getenv("NVIDIA_API_KEY")
+if not nvidia_api_key:
+    raise ValueError("❌ NVIDIA_API_KEY not set in .env file")
+
+# ✅ Initialize NVIDIA-compatible OpenAI client
+client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key=nvidia_api_key
+)
+
+# ✅ Flask app and CORS
 app = Flask(__name__)
+CORS(app)
 
-NIM_API_KEY = os.environ.get("NIM_API_KEY")
-NIM_ENDPOINT = "https://integrate.api.nvidia.com/v1"
-MODEL_ID = "meta/llama-3-1-nemotron-ultra-253b-v1"
+# ✅ Root health check
+@app.route("/")
+def root():
+    return jsonify({"status": "🟢 EduSpark AI backend is live."})
 
-HEADERS = {
-    "Authorization": f"Bearer {NIM_API_KEY}",
-    "Content-Type": "application/json"
-}
-
-# 🔁 Shared function to call NIM API
-def call_nemotron(prompt, system_message="You are EduSpark AI. Respond clearly and helpfully."):
-    url = f"{NIM_ENDPOINT}/llm/message/{MODEL_ID}"
-    payload = {
-        "messages": [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "frequency_penalty": 0.0,
-        "presence_penalty": 0.0
-    }
-
-    response = requests.post(url, headers=HEADERS, json=payload)
-
-    if response.status_code == 200:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
-    else:
-        raise Exception(response.text)
-
-# ✅ EduSpark Chat
+# ✅ AI query endpoint
 @app.route("/api/ask-nemotron", methods=["POST"])
 def ask_nemotron():
-    data = request.get_json()
-    prompt = data.get("prompt", "")
     try:
-        reply = call_nemotron(prompt)
+        data = request.get_json()
+        prompt = data.get("prompt", "").strip()
+
+        if not prompt:
+            return jsonify({"error": "Prompt is missing."}), 400
+
+        print(f"[🧠] Prompt: {prompt}")
+
+        completion = client.chat.completions.create(
+            model="nvidia/llama-3.1-nemotron-ultra-253b-v1",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.6,
+            top_p=0.95,
+            max_tokens=1024
+        )
+
+        reply = completion.choices[0].message.content
+        print(f"[✅] Reply: {reply[:100]}...")
+
         return jsonify({"reply": reply})
+
     except Exception as e:
+        print(f"[🔥] Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# 📝 Essay Generator
-@app.route("/api/essay-generator", methods=["POST"])
-def essay_generator():
-    data = request.get_json()
-    topic = data.get("topic", "")
-    try:
-        prompt = f"Write a detailed, well-structured essay on the topic: {topic}. Use paragraphs and clear points."
-        reply = call_nemotron(prompt, "You are an academic essay generator.")
-        return jsonify({"reply": reply})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# 📄 Notes Summarizer
-@app.route("/api/notes-summarizer", methods=["POST"])
-def notes_summarizer():
-    data = request.get_json()
-    content = data.get("content", "")
-    try:
-        prompt = f"Summarize the following text into neat, bullet-pointed study notes:\n\n{content}"
-        reply = call_nemotron(prompt, "You are a helpful summarizer.")
-        return jsonify({"reply": reply})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# 🌐 Translator
-@app.route("/api/translate", methods=["POST"])
-def translate():
-    data = request.get_json()
-    text = data.get("text", "")
-    lang = data.get("to", "Hindi")
-    try:
-        prompt = f"Translate this into {lang}:\n{text}"
-        reply = call_nemotron(prompt, f"You are a professional translator to {lang}.")
-        return jsonify({"reply": reply})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# 💻 Code Explainer
-@app.route("/api/explain-code", methods=["POST"])
-def explain_code():
-    data = request.get_json()
-    code = data.get("code", "")
-    try:
-        prompt = f"Explain this code line by line in simple terms:\n{code}"
-        reply = call_nemotron(prompt, "You are a code explainer for beginners.")
-        return jsonify({"reply": reply})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# 📄 PDF Assistant (future)
-@app.route("/api/ask-pdf", methods=["POST"])
-def ask_pdf():
-    data = request.get_json()
-    question = data.get("question", "")
-    pdf_text = data.get("text", "")
-    try:
-        prompt = f"Based on this PDF content:\n\n{pdf_text}\n\nAnswer this: {question}"
-        reply = call_nemotron(prompt, "You are a PDF assistant. Answer based only on the content.")
-        return jsonify({"reply": reply})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ✅ Root Ping Test
-@app.route("/", methods=["GET"])
-def home():
-    return "EduSpark AI Backend is running!"
-
+# ✅ Run server
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port)
