@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from openai import OpenAI
+import openai
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -7,29 +7,25 @@ import os
 # ✅ Load environment variables
 load_dotenv()
 
-# ✅ NVIDIA Nemotron API Key
-nvidia_api_key = os.getenv("NVIDIA_API_KEY")
-if not nvidia_api_key:
-    raise ValueError("❌ NVIDIA_API_KEY not set in .env file")
+# ✅ OpenAI API Key from .env
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    raise ValueError("❌ OPENAI_API_KEY not set in .env file")
 
-# ✅ Initialize NVIDIA-compatible OpenAI client
-client = OpenAI(
-    base_url="https://integrate.api.nvidia.com/v1",
-    api_key=nvidia_api_key
-)
+openai.api_key = openai_api_key  # Set key globally
 
-# ✅ Flask app and CORS
+# ✅ Flask app setup
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Root health check
+# ✅ Root route to check health
 @app.route("/")
 def root():
-    return jsonify({"status": "🟢 EduSpark AI backend is live."})
+    return jsonify({"status": "🟢 EduSpark ChatGPT API is live."})
 
-# ✅ AI query endpoint
-@app.route("/api/ask-nemotron", methods=["POST"])
-def ask_nemotron():
+# ✅ AI endpoint
+@app.route("/api/ask-chatgpt", methods=["POST"])
+def ask_chatgpt():
     try:
         data = request.get_json()
         prompt = data.get("prompt", "").strip()
@@ -39,15 +35,15 @@ def ask_nemotron():
 
         print(f"[🧠] Prompt: {prompt}")
 
-        completion = client.chat.completions.create(
-            model="nvidia/llama-3.1-nemotron-ultra-253b-v1",
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # Or "gpt-4" if you have access
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.6,
-            top_p=0.95,
-            max_tokens=1024
+            temperature=0.7,
+            max_tokens=1024,
+            top_p=1,
         )
 
-        reply = completion.choices[0].message.content
+        reply = response['choices'][0]['message']['content']
         print(f"[✅] Reply: {reply[:100]}...")
 
         return jsonify({"reply": reply})
@@ -56,7 +52,7 @@ def ask_nemotron():
         print(f"[🔥] Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# ✅ Run server
+# ✅ Run the Flask app
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
