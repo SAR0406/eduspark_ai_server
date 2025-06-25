@@ -1,7 +1,77 @@
+# === FLUTTER / DART ===
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+.idea/
+android/.gradle/
+android/app/debug/
+android/app/profile/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/ServiceDefinitions.json
+ios/Pods/
+macos/Pods/
+*.iml
+
+# VSCode config (optional)
+.vscode/
+
+# ENV Files
 .env
+.env.local
+.env.production
+.env.development
+
+# Secrets & Credentials
+credentials.json
+*.key
+*.pem
+
+# iOS artifacts
+ios/Runner.xcworkspace/
+ios/Podfile.lock
+
+# Dart compiled code
+*.dart.js
+*.js.deps
+*.js.map
+
+# Flutter generated files
+.flutter-plugins
+flutter_*.png
+
+# === PYTHON BACKEND ===
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-env/
+*.so
+*.egg-info/
+dist/
+build/
+.env
+.env.*
+
+# VSCode Python
+.vscode/
+.venv/
 venv/
+
+# Logs
+*.log
+logs/
+*.sqlite3
+
+# Jupyter
+.ipynb_checkpoints
+
+# Node (if any)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
