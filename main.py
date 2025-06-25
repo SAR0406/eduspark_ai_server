@@ -3,60 +3,37 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import uuid
-import logging
-
-# Import Gemini SDK
 import google.generativeai as genai
-from google.generativeai.types import (
-    GenerateContentConfig,
-    ThinkingConfig,
-)
 
-# =========================
-# 🔐 Load environment
-# =========================
+# ✅ Load environment variables
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
 
-if not GEMINI_API_KEY:
-    raise EnvironmentError("❌ GEMINI_API_KEY is missing in your .env file.")
+if not api_key:
+    raise ValueError("❌ GEMINI_API_KEY is missing in your .env file")
 
-# =========================
-# 🧠 Initialize Gemini
-# =========================
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.5-pro")
+# ✅ Configure Gemini Client
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel("gemini-1.5-pro")  # Use "gemini-1.5-pro" or "gemini-1.0-pro"
 
-# =========================
-# 🚀 Setup Flask
-# =========================
+# ✅ Flask App Setup
 app = Flask(__name__)
 CORS(app)
 
-# =========================
-# 💬 Session Store (In-Memory)
-# =========================
-chat_sessions: dict[str, genai.ChatSession] = {}
+# ✅ In-memory session store (for demo)
+chat_sessions = {}
 
-# =========================
-# 📌 Routes
-# =========================
 
 @app.route("/", methods=["GET"])
-def health_check():
-    return jsonify({"status": "✅ Gemini Chat API is running!"})
+def home():
+    return jsonify({"status": "✅ Gemini Chat Server is live."})
 
 
 @app.route("/api/start-session", methods=["POST"])
 def start_session():
     session_id = str(uuid.uuid4())
-    chat = model.start_chat(history=[])
-    chat_sessions[session_id] = chat
-
-    return jsonify({
-        "message": "🟢 Session started",
-        "session_id": session_id
-    })
+    chat_sessions[session_id] = model.start_chat(history=[])
+    return jsonify({"session_id": session_id})
 
 
 @app.route("/api/send-message", methods=["POST"])
@@ -65,51 +42,30 @@ def send_message():
         data = request.get_json()
         session_id = data.get("session_id")
         prompt = data.get("prompt", "").strip()
-        budget = int(data.get("budget", -1))  # -1 for dynamic thinking
-        include_thoughts = bool(data.get("thoughts", True))
 
         if not prompt:
-            return jsonify({"error": "❌ Prompt is required."}), 400
+            return jsonify({"error": "Prompt is required."}), 400
 
         if session_id not in chat_sessions:
-            return jsonify({"error": "❌ Invalid session ID."}), 400
-
-        config = GenerateContentConfig(
-            thinking_config=ThinkingConfig(
-                thinking_budget=budget,
-                include_thoughts=include_thoughts
-            )
-        )
+            return jsonify({"error": "Invalid or expired session_id."}), 400
 
         chat = chat_sessions[session_id]
-        response = chat.send_message(prompt, config=config)
+        response = chat.send_message(prompt)
 
-        reply = ""
-        thoughts = []
-
-        for part in response.parts:
-            if not part.text:
-                continue
-            if getattr(part, "thought", False):
-                thoughts.append(part.text)
-            else:
-                reply += part.text
-
-        # Collect full chat history
+        reply = response.text.strip() if response.text else "No response"
         history = [
             {"role": msg.role, "text": msg.parts[0].text}
-            for msg in chat.get_history()
+            for msg in chat.history
         ]
 
         return jsonify({
-            "reply": reply.strip(),
-            "thoughts": thoughts,
+            "reply": reply,
             "history": history
         })
 
     except Exception as e:
-        logging.exception("Error processing message")
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        print(f"❌ Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/end-session", methods=["POST"])
@@ -120,18 +76,14 @@ def end_session():
 
         if session_id in chat_sessions:
             del chat_sessions[session_id]
-            return jsonify({"message": "🛑 Session ended."})
+            return jsonify({"status": "Session ended."})
         else:
-            return jsonify({"error": "❌ Invalid session ID."}), 400
+            return jsonify({"error": "Invalid session ID."}), 400
 
     except Exception as e:
-        logging.exception("Error ending session")
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# =========================
-# 🚀 Run Server
-# =========================
+
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
-    print(f"🚀 Server running on http://localhost:{port}")
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
