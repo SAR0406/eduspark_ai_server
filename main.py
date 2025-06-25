@@ -41,7 +41,7 @@ def send_message():
                 max_tokens=4096,
                 frequency_penalty=0,
                 presence_penalty=0,
-                stream=True
+                stream=false
             )
             for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
