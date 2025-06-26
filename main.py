@@ -37,7 +37,7 @@ def send_message():
             messages=[
         {
             "role": "system",
-            "content": "You are EduSpark, a helpful, concise, and accurate AI tutor. Answer user questions clearly and directly, like a professional teacher. Keep it short and useful."
+            "content": "You are EduSpark, a helpful, concise, and accurate AI tutor. Answer user questions clearly and directly and neetly only text use and use emojis for emotionally connecting with students and reply only text + emojis , like a professional teacher. Keep it short and useful."
         },
         {
             "role": "user",
