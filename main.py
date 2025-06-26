@@ -2,119 +2,110 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
 from dotenv import load_dotenv
-import logging
 import os
 
-# Load .env variables
+# Load API Key securely
 load_dotenv()
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-
-# NVIDIA API Config
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
-MODEL_NAME = "nvidia/llama-3.1-nemotron-ultra-253b-v1"
 
 client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
     api_key=NVIDIA_API_KEY
 )
 
-# Flask App
 app = Flask(__name__)
 CORS(app)
 
+# ✨ Model selection per use-case
+MODEL_MAP = {
+    "chat": "mistral-nemo-12b-instruct",
+    "code": "llama-3.1-nemotron-70b-instruct",
+    "study": "phi-3-mini-4k-instruct",
+    "langchat": "llama-3.3-nemotron-super-49b-v1",
+    "research": "llama-3-70b-instruct",
+    "vision": "llama3-2-llb-vision-instruct"
+}
+
+# 🧠 Common system prompt for consistency
+SYSTEM_PROMPT = (
+    "You are EduSpark 🌟 — a super-intelligent, helpful AI assistant. "
+    "Respond clearly, accurately, and concisely. Add emojis when relevant. "
+    "Avoid using * for formatting. Keep answers engaging and informative."
+)
+
+def generate_response(prompt, model_key, max_tokens=4096, temperature=0.7, top_p=0.95,
+                      freq_penalty=0, presence_penalty=0):
+    try:
+        model_name = MODEL_MAP.get(model_key)
+        if not model_name:
+            return {"response": f"❌ Model key '{model_key}' not found."}, 400
+
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            frequency_penalty=freq_penalty,
+            presence_penalty=presence_penalty,
+            stream=False
+        )
+        return {"response": response.choices[0].message.content}, 200
+
+    except Exception as e:
+        print("❌ Error:", e)
+        return {"response": f"Server error: {str(e)}"}, 500
+
+# 🧪 Route test
 @app.route("/", methods=["GET"])
-def health_check():
-    return jsonify({
-        "status": "✅ EduSpark AI Server is running",
-        "model": MODEL_NAME,
-        "streaming": False
-    })
+def root():
+    return jsonify({"message": "✅ EduSpark AI API is running with NVIDIA NIM 🚀"})
 
+# 🤖 AI Chat
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    prompt = request.json.get("prompt", "")
+    return jsonify(*generate_response(prompt, "chat"))
 
-# =========================================
-# ✨ /api/send-message — EduSpark AI Chat
-# =========================================
-@app.route("/api/send-message", methods=["POST"])
-def send_message():
-    try:
-        data = request.get_json()
-        prompt = data.get("prompt", "").strip()
-
-        if not prompt:
-            return jsonify({"response": "⚠️ No prompt provided."}), 400
-
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Answer like a knowledgeable but human teacher. Avoid long or overly complex replies."
-                        "You are EduSpark AI, a brilliant yet friendly teacher. Answer clearly, briefly, and helpfully like a human expert. Use bullet points or line breaks if needed, and include emojis to enhance clarity 😊. Avoid using asterisks (*) or markdown. Your tone should be positive, direct, and easy to understand — just like a real classroom!"
-
-                    )
-                },
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.4,
-            top_p=0.9,
-            max_tokens=512,
-            frequency_penalty=0.2,
-            presence_penalty=0,
-            stream=False
-        )
-
-        message = response.choices[0].message.content.strip()
-        logging.info(f"[Chat] Prompt: {prompt}\nReply: {message}")
-        return jsonify({"response": message})
-
-    except Exception as e:
-        logging.error(f"[Chat Error]: {e}")
-        return jsonify({"response": f"⚠️ Server error: {str(e)}"}), 500
-
-
-# =========================================
-# 💻 /api/code — Code Assistant Endpoint
-# =========================================
+# 💻 Code Generation
 @app.route("/api/code", methods=["POST"])
-def code_assistant():
-    try:
-        data = request.get_json()
-        prompt = data.get("prompt", "").strip()
+def code():
+    prompt = request.json.get("prompt", "")
+    return jsonify(*generate_response(
+        prompt, "code",
+        max_tokens=16384,
+        temperature=1,
+        top_p=1,
+        freq_penalty=2,
+        presence_penalty=2
+    ))
 
-        if not prompt:
-            return jsonify({"response": "⚠️ No prompt provided."}), 400
+# 📚 Academic Assistant
+@app.route("/api/study", methods=["POST"])
+def study():
+    prompt = request.json.get("prompt", "")
+    return jsonify(*generate_response(prompt, "study"))
 
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are EduSpark Code Assistant. Help users write code, debug, explain functions, and improve their code. "
-                        "Always give clean, well-commented, and optimized code with explanations."
-                    )
-                },
-                {"role": "user", "content": prompt}
-            ],
-            temperature=1.0,
-            top_p=1.0,
-            max_tokens=16384,
-            frequency_penalty=2.0,
-            presence_penalty=2.0,
-            stream=False
-        )
+# 🌍 Multilingual Assistant
+@app.route("/api/langchat", methods=["POST"])
+def langchat():
+    prompt = request.json.get("prompt", "")
+    return jsonify(*generate_response(prompt, "langchat"))
 
-        message = response.choices[0].message.content.strip()
-        logging.info(f"[Code] Prompt: {prompt}\nCode Reply: {message}")
-        return jsonify({"response": message})
+# 📊 Research Expert (large context)
+@app.route("/api/research", methods=["POST"])
+def research():
+    prompt = request.json.get("prompt", "")
+    return jsonify(*generate_response(prompt, "research", max_tokens=8192))
 
-    except Exception as e:
-        logging.error(f"[Code Error]: {e}")
-        return jsonify({"response": f"⚠️ Server error: {str(e)}"}), 500
-
+# 🖼️ Future: Vision/Image QA
+@app.route("/api/vision", methods=["POST"])
+def vision():
+    prompt = request.json.get("prompt", "")
+    return jsonify(*generate_response(prompt, "vision"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
