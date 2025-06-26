@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -6,7 +6,7 @@ import os
 
 load_dotenv()
 
-# Load API key securely
+# Securely load NVIDIA API Key
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 MODEL_NAME = "nvidia/llama-3.1-nemotron-ultra-253b-v1"
 
@@ -20,44 +20,29 @@ CORS(app)
 
 @app.route("/", methods=["GET"])
 def root():
-    return jsonify({"message": "✅ EduSpark AI is running with Nemotron Ultra 253B"})
+    return jsonify({"message": "✅ EduSpark AI is running with Nemotron Ultra 253B (streaming disabled)"})
 
 @app.route("/api/send-message", methods=["POST"])
 def send_message():
     try:
         data = request.get_json()
         prompt = data.get("prompt", "")
-        stream = data.get("stream", False)
 
         if not prompt:
             return jsonify({"response": "No prompt provided"}), 400
 
-        def generate_stream():
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.6,
-                top_p=0.95,
-                max_tokens=4096,
-                frequency_penalty=0,
-                presence_penalty=0,
-                stream=false
-            )
-            for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-
-        if stream:
-            return Response(generate_stream(), mimetype="text/plain")
-
-        # Fallback: stream=False, simple response
+        # Always use stream=False
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
             top_p=0.95,
-            max_tokens=4096
+            max_tokens=4096,
+            frequency_penalty=0,
+            presence_penalty=0,
+            stream=False  # Force stream OFF
         )
+
         message = response.choices[0].message.content
         return jsonify({"response": message})
 
