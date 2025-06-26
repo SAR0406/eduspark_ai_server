@@ -2,11 +2,16 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
 from dotenv import load_dotenv
+import logging
 import os
 
+# Load .env variables
 load_dotenv()
 
-# Securely load NVIDIA API Key
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+
+# NVIDIA API Config
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 MODEL_NAME = "nvidia/llama-3.1-nemotron-ultra-253b-v1"
 
@@ -15,49 +20,100 @@ client = OpenAI(
     api_key=NVIDIA_API_KEY
 )
 
+# Flask App
 app = Flask(__name__)
 CORS(app)
 
 @app.route("/", methods=["GET"])
-def root():
-    return jsonify({"message": "✅ EduSpark AI is running with Nemotron Ultra 253B (streaming disabled)"})
+def health_check():
+    return jsonify({
+        "status": "✅ EduSpark AI Server is running",
+        "model": MODEL_NAME,
+        "streaming": False
+    })
 
+
+# =========================================
+# ✨ /api/send-message — EduSpark AI Chat
+# =========================================
 @app.route("/api/send-message", methods=["POST"])
 def send_message():
     try:
         data = request.get_json()
-        prompt = data.get("prompt", "")
+        prompt = data.get("prompt", "").strip()
 
         if not prompt:
-            return jsonify({"response": "No prompt provided"}), 400
+            return jsonify({"response": "⚠️ No prompt provided."}), 400
 
-        # Always use stream=False
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-        {
-            "role": "system",
-            "content": "You are EduSpark, a helpful, concise, and accurate AI tutor. Answer user questions clearly and directly and neetly only text use and use emojis for emotionally connecting with students and reply only text + emojis no use of * , like a professional teacher. answer acording to topic asked answer only that much asked and give more detail not tto much act like real teacher  suggestions to ask and useful for student make it fun."
-        },
-        {
-            "role": "user",
-            "content": prompt
-        }
-    ],
-            temperature=0.6,
-            top_p=0.95,
-            max_tokens=4096,
-            frequency_penalty=0,
+                {
+                    "role": "system",
+                    "content": (
+                        "You are EduSpark, a helpful and concise AI tutor. "
+                        "Answer like a knowledgeable but human teacher. Avoid long or overly complex replies."
+                    )
+                },
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.4,
+            top_p=0.9,
+            max_tokens=512,
+            frequency_penalty=0.2,
             presence_penalty=0,
-            stream=False  # Force stream OFF
+            stream=False
         )
 
-        message = response.choices[0].message.content
+        message = response.choices[0].message.content.strip()
+        logging.info(f"[Chat] Prompt: {prompt}\nReply: {message}")
         return jsonify({"response": message})
 
     except Exception as e:
-        print("❌ Error:", e)
-        return jsonify({"response": f"Server error: {str(e)}"}), 500
+        logging.error(f"[Chat Error]: {e}")
+        return jsonify({"response": f"⚠️ Server error: {str(e)}"}), 500
+
+
+# =========================================
+# 💻 /api/code — Code Assistant Endpoint
+# =========================================
+@app.route("/api/code", methods=["POST"])
+def code_assistant():
+    try:
+        data = request.get_json()
+        prompt = data.get("prompt", "").strip()
+
+        if not prompt:
+            return jsonify({"response": "⚠️ No prompt provided."}), 400
+
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are EduSpark Code Assistant. Help users write code, debug, explain functions, and improve their code. "
+                        "Always give clean, well-commented, and optimized code with explanations."
+                    )
+                },
+                {"role": "user", "content": prompt}
+            ],
+            temperature=1.0,
+            top_p=1.0,
+            max_tokens=16384,
+            frequency_penalty=2.0,
+            presence_penalty=2.0,
+            stream=False
+        )
+
+        message = response.choices[0].message.content.strip()
+        logging.info(f"[Code] Prompt: {prompt}\nCode Reply: {message}")
+        return jsonify({"response": message})
+
+    except Exception as e:
+        logging.error(f"[Code Error]: {e}")
+        return jsonify({"response": f"⚠️ Server error: {str(e)}"}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
