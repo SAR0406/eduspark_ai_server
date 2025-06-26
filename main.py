@@ -34,7 +34,16 @@ def send_message():
         # Always use stream=False
         response = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+        {
+            "role": "system",
+            "content": "You are EduSpark, a helpful, concise, and accurate AI tutor. Answer user questions clearly and directly, like a professional teacher. Keep it short and useful."
+        },
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ],
             temperature=0.6,
             top_p=0.95,
             max_tokens=4096,
